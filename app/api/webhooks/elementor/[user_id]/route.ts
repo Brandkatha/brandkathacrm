@@ -117,30 +117,6 @@ export async function POST(
   console.log(`[Elementor Webhook] Referer: ${referer}`)
   console.log(`[Elementor Webhook] User Agent: ${userAgent}`)
 
-  // Check environment variables first
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    console.error('[Elementor Webhook] ❌ Missing environment variables')
-    console.error('NEXT_PUBLIC_SUPABASE_URL:', !!process.env.NEXT_PUBLIC_SUPABASE_URL)
-    console.error('SUPABASE_SERVICE_ROLE_KEY:', !!process.env.SUPABASE_SERVICE_ROLE_KEY)
-    
-    responseStatus = 500
-    errorMessage = 'Server configuration error: Missing Supabase credentials'
-    responseBody = { 
-      error: 'Server configuration error',
-      details: 'Missing required environment variables',
-      debug: {
-        hasSupabaseUrl: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
-        hasServiceRoleKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY
-      }
-    }
-    
-    const response = NextResponse.json(responseBody, { status: responseStatus })
-    response.headers.set('Access-Control-Allow-Origin', '*')
-    response.headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-    response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization')
-    return response
-  }
-
   try {
     // Parse request body with enhanced form-urlencoded support
     const contentType = request.headers.get('content-type') || ''
@@ -190,14 +166,7 @@ export async function POST(
       console.error(`[Elementor Webhook] User validation failed for ID: ${userId}`, userError)
       responseStatus = 404
       errorMessage = `User not found: ${userId}`
-      responseBody = { 
-        error: 'User not found', 
-        user_id: userId,
-        debug: {
-          userError: userError?.message,
-          userId: userId
-        }
-      }
+      responseBody = { error: 'User not found', user_id: userId }
     } else {
       console.log(`[Elementor Webhook] ✅ User validated: ${user.user.email}`)
 
@@ -257,12 +226,7 @@ export async function POST(
             database_error: leadError.message,
             database_code: leadError.code,
             database_details: leadError.details,
-            lead_data: leadData,
-            debug: {
-              supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL?.substring(0, 30) + '...',
-              hasServiceKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
-              tableName: 'leads'
-            }
+            lead_data: leadData
           }
         } else {
           processedSuccessfully = true
@@ -301,44 +265,31 @@ export async function POST(
     responseBody = { 
       error: 'Internal server error',
       details: errorMessage,
-      stack: error instanceof Error ? error.stack : undefined,
-      debug: {
-        timestamp: new Date().toISOString(),
-        userId: userId,
-        hasSupabaseConfig: !!process.env.NEXT_PUBLIC_SUPABASE_URL && !!process.env.SUPABASE_SERVICE_ROLE_KEY
-      }
+      stack: error instanceof Error ? error.stack : undefined
     }
   }
 
-  // Log the webhook request (only if we have proper config)
-  if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    console.log(`[Elementor Webhook] 📝 Logging request with status: ${responseStatus}`)
-    await logWebhookRequest({
-      user_id: userId,
-      webhook_type: 'elementor',
-      request_method: 'POST',
-      request_headers: Object.fromEntries(request.headers.entries()),
-      request_body: requestBody,
-      response_status: responseStatus,
-      response_body: responseBody,
-      ip_address: ipAddress,
-      user_agent: userAgent,
-      processed_successfully: processedSuccessfully,
-      error_message: errorMessage
-    })
-  }
+  // Log the webhook request
+  console.log(`[Elementor Webhook] 📝 Logging request with status: ${responseStatus}`)
+  await logWebhookRequest({
+    user_id: userId,
+    webhook_type: 'elementor',
+    request_method: 'POST',
+    request_headers: Object.fromEntries(request.headers.entries()),
+    request_body: requestBody,
+    response_status: responseStatus,
+    response_body: responseBody,
+    ip_address: ipAddress,
+    user_agent: userAgent,
+    processed_successfully: processedSuccessfully,
+    error_message: errorMessage
+  })
 
   console.log(`[Elementor Webhook] ===== REQUEST COMPLETE =====`)
   console.log(`[Elementor Webhook] Status: ${responseStatus}`)
   console.log(`[Elementor Webhook] Success: ${processedSuccessfully}`)
   
-  // Add CORS headers
-  const response = NextResponse.json(responseBody, { status: responseStatus })
-  response.headers.set('Access-Control-Allow-Origin', '*')
-  response.headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-  response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization')
-  
-  return response
+  return NextResponse.json(responseBody, { status: responseStatus })
 }
 
 export async function GET(
@@ -349,73 +300,29 @@ export async function GET(
 
   console.log(`[Elementor Webhook GET] Health check for user: ${userId}`)
 
-  // Check environment variables
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    console.error('[Elementor Webhook GET] ❌ Missing environment variables')
-    const response = NextResponse.json({ 
-      error: 'Server configuration error',
-      details: 'Missing required environment variables',
-      debug: {
-        hasSupabaseUrl: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
-        hasServiceRoleKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
-        timestamp: new Date().toISOString()
-      }
-    }, { status: 500 })
-    response.headers.set('Access-Control-Allow-Origin', '*')
-    return response
-  }
-
   try {
     // Validate user exists
     const { data: user, error: userError } = await supabaseAdmin.auth.admin.getUserById(userId)
     
     if (userError || !user?.user) {
       console.log(`[Elementor Webhook GET] User not found: ${userId}`)
-      const response = NextResponse.json({ 
-        error: 'User not found',
-        user_id: userId,
-        debug: {
-          userError: userError?.message,
-          timestamp: new Date().toISOString()
-        }
-      }, { status: 404 })
-      response.headers.set('Access-Control-Allow-Origin', '*')
-      return response
+      return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
     console.log(`[Elementor Webhook GET] ✅ Health check passed for: ${user.user.email}`)
     
-    const response = NextResponse.json({
+    return NextResponse.json({
       success: true,
       message: 'Elementor webhook endpoint is active and ready',
       user_id: userId,
       user_email: user.user.email,
       timestamp: new Date().toISOString(),
       status: 'healthy',
-      supported_formats: ['application/json', 'application/x-www-form-urlencoded', 'text/plain'],
-      debug: {
-        supabaseConfigured: true,
-        userValidated: true
-      }
+      supported_formats: ['application/json', 'application/x-www-form-urlencoded', 'text/plain']
     })
-    
-    response.headers.set('Access-Control-Allow-Origin', '*')
-    response.headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-    response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization')
-    
-    return response
   } catch (error) {
     console.error('[Elementor Webhook GET] Error:', error)
-    const response = NextResponse.json({ 
-      error: 'Internal server error',
-      details: error instanceof Error ? error.message : 'Unknown error',
-      debug: {
-        timestamp: new Date().toISOString(),
-        userId: userId
-      }
-    }, { status: 500 })
-    response.headers.set('Access-Control-Allow-Origin', '*')
-    return response
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
