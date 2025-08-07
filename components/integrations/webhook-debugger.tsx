@@ -96,7 +96,7 @@ export function WebhookDebugger({ webhookUrl, platform }: WebhookDebuggerProps) 
         responseData = responseText
       }
 
-      const responseHeaders = {}
+      const responseHeaders: Record<string, string> = {}
       response.headers.forEach((value, key) => {
         responseHeaders[key] = value
       })
@@ -134,7 +134,7 @@ export function WebhookDebugger({ webhookUrl, platform }: WebhookDebuggerProps) 
         data: {
           error: 'Network Error',
           message: errorMessage,
-          details: 'Could not connect to webhook endpoint. This may be due to CORS restrictions or network issues.'
+          details: 'Could not connect to webhook endpoint. Make sure your app is deployed and environment variables are configured.'
         },
         responseTime: 0,
         timestamp: new Date().toISOString()
@@ -282,6 +282,12 @@ export function WebhookDebugger({ webhookUrl, platform }: WebhookDebuggerProps) 
                       Lead ID: {response.data.lead_id}
                     </p>
                   )}
+                  {!response.success && response.status === 0 && (
+                    <div className="mt-2 p-2 bg-red-100 rounded text-sm">
+                      <strong>Deployment Required:</strong>
+                      <p className="mt-1">This webhook requires your app to be deployed with proper environment variables configured.</p>
+                    </div>
+                  )}
                 </AlertDescription>
               </div>
             </Alert>
@@ -332,7 +338,7 @@ export function WebhookDebugger({ webhookUrl, platform }: WebhookDebuggerProps) 
               <li>For Elementor, use form_fields[fieldname] format in form-urlencoded</li>
               <li>Check the Response Body tab for detailed error messages</li>
               <li>Response time helps identify performance issues</li>
-              <li>This works with both preview and live webhook URLs</li>
+              <li>Deploy your app to test with real webhook endpoints</li>
             </ul>
           </AlertDescription>
         </Alert>

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -8,6 +8,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Copy, Check, ExternalLink, ChevronDown, ChevronRight, Play, CheckCircle, XCircle, Loader2, AlertTriangle, Globe, Facebook } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
+import { createClient } from '@/utils/supabase/client'
 
 interface WebhookUrlCardProps {
   title: string
@@ -27,7 +28,17 @@ export function WebhookUrlCard({
   const [isFieldsOpen, setIsFieldsOpen] = useState(false)
   const [testResult, setTestResult] = useState<any>(null)
   const [testing, setTesting] = useState(false)
+  const [currentUser, setCurrentUser] = useState<any>(null)
   const { toast } = useToast()
+  const supabase = createClient()
+
+  useEffect(() => {
+    const getCurrentUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      setCurrentUser(user)
+    }
+    getCurrentUser()
+  }, [supabase])
 
   const copyToClipboard = async (text: string) => {
     try {
@@ -51,34 +62,7 @@ export function WebhookUrlCard({
     setTesting(true)
     setTestResult(null)
 
-    // Check if we're in a preview environment
-    const isPreview = window.location.hostname.includes('v0.dev') || 
-                     window.location.hostname.includes('localhost')
-
-    if (isPreview) {
-      // Simulate a successful connection test in preview
-      setTimeout(() => {
-        setTestResult({
-          success: true,
-          status: 200,
-          data: { 
-            message: 'Preview Mode: Webhook endpoint is accessible and ready to receive requests.',
-            endpoint: 'active'
-          },
-          isPreview: true
-        })
-        
-        toast({
-          title: "Connection Test Successful!",
-          description: "Webhook endpoint is accessible (preview mode)",
-        })
-        setTesting(false)
-      }, 1000)
-      return
-    }
-
     try {
-      // Test with a simple GET request first
       const response = await fetch(webhookUrl, {
         method: 'GET',
         headers: {
@@ -114,7 +98,7 @@ export function WebhookUrlCard({
         status: 0,
         data: { 
           error: 'Network Error',
-          message: 'Could not connect to webhook endpoint. This may be due to CORS restrictions or the server not being deployed yet.'
+          message: 'Could not connect to webhook endpoint. Make sure your app is deployed and environment variables are configured.'
         }
       })
       
@@ -131,31 +115,6 @@ export function WebhookUrlCard({
   const testWithSampleData = async () => {
     setTesting(true)
     setTestResult(null)
-
-    const isPreview = window.location.hostname.includes('v0.dev') || 
-                     window.location.hostname.includes('localhost')
-
-    if (isPreview) {
-      // Simulate a successful test in preview
-      setTimeout(() => {
-        setTestResult({
-          success: true,
-          status: 200,
-          data: { 
-            message: 'Preview Mode: This is a simulated successful webhook test. In production, this would create a real lead.',
-            lead_id: 'preview-lead-123'
-          },
-          isSimulated: true
-        })
-        
-        toast({
-          title: "Simulated Test Successful!",
-          description: "This is a preview simulation. Deploy to test with real data.",
-        })
-        setTesting(false)
-      }, 1500)
-      return
-    }
 
     try {
       const sampleData = platform === 'elementor' 
@@ -238,7 +197,7 @@ export function WebhookUrlCard({
   const getSetupInstructions = () => {
     if (platform === 'elementor') {
       return [
-        "Open your Elementor form in edit mode (works with both live and preview sites)",
+        "Open your Elementor form in edit mode on your website",
         "Go to 'Actions After Submit' and add a 'Webhook' action",
         "Paste the webhook URL and set method to POST",
         "Set the format to 'Form Data' (not JSON)",
@@ -339,34 +298,31 @@ export function WebhookUrlCard({
           <Alert className={
             testResult.success 
               ? 'border-green-200 bg-green-50' 
-              : testResult.isPreview 
-                ? 'border-blue-200 bg-blue-50'
-                : 'border-red-200 bg-red-50'
+              : 'border-red-200 bg-red-50'
           }>
             <div className="flex items-start gap-2">
               {testResult.success ? (
                 <CheckCircle className="h-4 w-4 text-green-600 mt-0.5" />
-              ) : testResult.isPreview ? (
-                <AlertTriangle className="h-4 w-4 text-blue-600 mt-0.5" />
               ) : (
                 <XCircle className="h-4 w-4 text-red-600 mt-0.5" />
               )}
               <AlertDescription className="flex-1">
                 <div>
                   <strong>
-                    {testResult.isPreview ? 'Preview Mode' : 
-                     testResult.isSimulated ? 'Simulated Test' :
-                     testResult.success ? `Success (${testResult.status})` : 
-                     `Failed (${testResult.status})`}:
+                    {testResult.success ? `Success (${testResult.status})` : `Failed (${testResult.status})`}:
                   </strong>
                   <p className="mt-1">{testResult.data.message || testResult.data.error}</p>
                   {testResult.data.lead_id && (
                     <p className="text-sm mt-1 font-mono">Lead ID: {testResult.data.lead_id}</p>
                   )}
-                  {testResult.isPreview && (
-                    <div className="mt-2 p-2 bg-blue-100 rounded text-sm">
-                      <strong>Preview Testing:</strong>
-                      <p className="mt-1">This webhook URL works with both preview and live sites. You can test it directly from your Elementor forms.</p>
+                  {!testResult.success && testResult.status === 0 && (
+                    <div className="mt-2 p-2 bg-red-100 rounded text-sm">
+                      <strong>Deployment Required:</strong>
+                      <ol className="list-decimal list-inside mt-1 space-y-1">
+                        <li>Deploy your app to Vercel or another hosting platform</li>
+                        <li>Add your Supabase credentials to environment variables</li>
+                        <li>Use the deployed webhook URL in your forms</li>
+                      </ol>
                     </div>
                   )}
                 </div>
@@ -391,8 +347,8 @@ export function WebhookUrlCard({
             <Alert>
               <AlertTriangle className="h-4 w-4" />
               <AlertDescription>
-                <strong>Good News:</strong> This webhook URL works with both preview and live websites. 
-                You can test it directly from your forms without needing to deploy first.
+                <strong>Important:</strong> This webhook URL only works when your app is deployed with proper Supabase credentials. 
+                Make sure to deploy your app and configure environment variables before using in production.
               </AlertDescription>
             </Alert>
             <ol className="list-decimal list-inside space-y-2 text-sm">
@@ -449,6 +405,11 @@ export function WebhookUrlCard({
             <CheckCircle className="mr-1 h-3 w-3 text-green-500" />
             Ready for {platform === 'elementor' ? 'form submissions' : 'lead ads'}
           </Badge>
+          {currentUser && (
+            <Badge variant="secondary" className="text-xs">
+              User: {currentUser.email}
+            </Badge>
+          )}
         </div>
       </CardContent>
     </Card>

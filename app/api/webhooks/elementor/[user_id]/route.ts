@@ -289,7 +289,13 @@ export async function POST(
   console.log(`[Elementor Webhook] Status: ${responseStatus}`)
   console.log(`[Elementor Webhook] Success: ${processedSuccessfully}`)
   
-  return NextResponse.json(responseBody, { status: responseStatus })
+  // Add CORS headers
+  const response = NextResponse.json(responseBody, { status: responseStatus })
+  response.headers.set('Access-Control-Allow-Origin', '*')
+  response.headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+  response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+  
+  return response
 }
 
 export async function GET(
@@ -306,12 +312,14 @@ export async function GET(
     
     if (userError || !user?.user) {
       console.log(`[Elementor Webhook GET] User not found: ${userId}`)
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
+      const response = NextResponse.json({ error: 'User not found' }, { status: 404 })
+      response.headers.set('Access-Control-Allow-Origin', '*')
+      return response
     }
 
     console.log(`[Elementor Webhook GET] ✅ Health check passed for: ${user.user.email}`)
     
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       message: 'Elementor webhook endpoint is active and ready',
       user_id: userId,
@@ -320,9 +328,17 @@ export async function GET(
       status: 'healthy',
       supported_formats: ['application/json', 'application/x-www-form-urlencoded', 'text/plain']
     })
+    
+    response.headers.set('Access-Control-Allow-Origin', '*')
+    response.headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+    response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+    
+    return response
   } catch (error) {
     console.error('[Elementor Webhook GET] Error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    const response = NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    response.headers.set('Access-Control-Allow-Origin', '*')
+    return response
   }
 }
 
